@@ -50,6 +50,79 @@ export default function RiderApp() {
     setToast({ message, type, id: Date.now() });
     setTimeout(() => setToast(null), 3000);
   };
+  // --- SCANNER HANDLERS ---
+  const handleVendorScanComplete = async (barcode: string) => {
+     if (!activeVendorPickup) return;
+     const vid = activeVendorPickup;
+     
+     const aptOrders = orders.filter(o => o.time_slot === selectedSlot && o.apartment_name === selectedApt && ["pending", "packed", "out_for_delivery"].includes(o.status));
+     const vMap: any = {};
+     aptOrders.forEach(o => {
+       const oItems = JSON.parse(o.items_json || "[]");
+       oItems.forEach((i: any) => {
+         if(i.id === "_metadata_") return;
+         const v = i.vendorId || "unknown";
+         if(!vMap[v]) vMap[v] = { qty: 0, packedQty: 0, items: [] };
+         vMap[v].qty += i.qty;
+         const existingItem = vMap[v].items.find((item: any) => item.name === i.name);
+         if (existingItem) { existingItem.qty += i.qty; } 
+         else { vMap[v].items.push({ name: i.name, qty: i.qty }); }
+       });
+     });
+     
+     const vendorData = vMap[vid];
+     if (!vendorData) return;
+
+     let productName = "Unknown Product";
+     try {
+       const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+       const json = await res.json();
+       if (json.status === 1) productName = json.product.product_name || "Unknown Product";
+     } catch(e) {}
+
+     const required = vendorData.items.find((i: any) => i.name.toLowerCase() === productName.toLowerCase() || i.name.toLowerCase().includes(productName.toLowerCase()) || productName.toLowerCase().includes(i.name.toLowerCase()));
+     
+     if (required) {
+        const pickedForVendor = pickedItemsByVendor[vid] || [];
+        const alreadyScannedCount = pickedForVendor.filter(si => si === required.name).length;
+        if (alreadyScannedCount < required.qty) {
+          setPickedItemsByVendor(prev => {
+            const prevList = prev[vid] || [];
+            return { ...prev, [vid]: [...prevList, required.name] };
+          });
+          showToast(`Verified: ${productName} picked!`, "success");
+        } else {
+          showToast(`You already picked enough of ${productName}.`, "info");
+        }
+     } else {
+        showToast(`ERROR: ${productName} is NOT assigned to this vendor! Leave it behind.`, "error");
+     }
+  }, [activeVendorPickup, orders, selectedSlot, selectedApt, pickedItemsByVendor]);
+
+  const handleDoorstepScanComplete = useCallback(async (barcode: string) => {
+    if (!activeOrder) return;
+    let productName = "Unknown Product";
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const json = await res.json();
+      if (json.status === 1) productName = json.product.product_name || "Unknown Product";
+    } catch(e) {}
+
+    const orderItems = JSON.parse(activeOrder.items_json || "[]");
+    const itemInOrder = orderItems.find((i: any) => i.id !== "_metadata_" && (i.name.toLowerCase() === productName.toLowerCase() || i.name.toLowerCase().includes(productName.toLowerCase()) || productName.toLowerCase().includes(i.name.toLowerCase())));
+    
+    if (itemInOrder) {
+      const scannedCount = scannedItems.filter((i: string) => i === itemInOrder.name).length;
+      if (scannedCount < itemInOrder.qty) {
+        setScannedItems(prev => [...prev, itemInOrder.name]);
+        showToast(`Verified: ${productName}`, "success");
+      } else {
+        showToast(`You already scanned all required ${productName}.`, "info");
+      }
+    } else {
+      showToast(`ERROR: ${productName} is NOT in this order! Do not deliver.`, "error");
+    }
+  }, [activeOrder, scannedItems]);
 
   // --- SCANNER LOGIC ---
   useEffect(() => {
@@ -319,32 +392,6 @@ export default function RiderApp() {
        const vendor = vendors.find(v => v.$id === vid);
        const vendorName = vendor ? vendor.name : "Local Shop";
        
-       const handleVendorScanComplete = async (barcode: string) => {
-         let productName = "Unknown Product";
-         try {
-           const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-           const json = await res.json();
-           if (json.status === 1) productName = json.product.product_name || "Unknown Product";
-         } catch(e) {}
-
-         const required = vendorData.items.find(i => i.name.toLowerCase() === productName.toLowerCase() || i.name.toLowerCase().includes(productName.toLowerCase()) || productName.toLowerCase().includes(i.name.toLowerCase()));
-         
-         if (required) {
-            const pickedForVendor = pickedItemsByVendor[vid] || [];
-            const alreadyScannedCount = pickedForVendor.filter(si => si === required.name).length;
-            if (alreadyScannedCount < required.qty) {
-              setPickedItemsByVendor(prev => {
-                const prevList = prev[vid] || [];
-                return { ...prev, [vid]: [...prevList, required.name] };
-              });
-              showToast(`Verified: ${productName} picked!`, "success");
-            } else {
-              showToast(`You already picked enough of ${productName}.`, "info");
-            }
-         } else {
-            showToast(`ERROR: ${productName} is NOT assigned to this vendor! Leave it behind.`, "error");
-         }
-       };
 
        const handleVendorScanBtn = () => {
          setScanMode("vendor");
@@ -548,28 +595,7 @@ export default function RiderApp() {
     return scannedCount >= req.qty;
   });
 
-  const handleDoorstepScanComplete = async (barcode: string) => {
-    let productName = "Unknown Product";
-    try {
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-      const json = await res.json();
-      if (json.status === 1) productName = json.product.product_name || "Unknown Product";
-    } catch(e) {}
 
-    const required = itemsRequired.find(i => i.name.toLowerCase() === productName.toLowerCase() || i.name.toLowerCase().includes(productName.toLowerCase()) || productName.toLowerCase().includes(i.name.toLowerCase()));
-    
-    if (required) {
-      const alreadyScannedCount = scannedItems.filter(si => si === required.name).length;
-      if (alreadyScannedCount < required.qty) {
-        setScannedItems(prev => [...prev, required.name]);
-        showToast(`Verified: ${productName} belongs to this order!`, "success");
-      } else {
-        showToast(`You already scanned enough of ${productName} for this order.`, "info");
-      }
-    } else {
-      showToast(`ERROR: ${productName} DOES NOT BELONG TO FLAT ${activeOrder.flat_number}! Prevented wrong delivery.`, "error");
-    }
-  };
 
   const markDelivered = async () => {
     await fetch(API, {

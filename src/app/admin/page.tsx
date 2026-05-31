@@ -18,7 +18,7 @@ interface Order {
 }
 interface Product {
   $id: string; name: string; category: string;
-  mrp: number; wholesale_price: number; image_url: string;
+  mrp: number; wholesale_price: number; image_url: string; quantity?: number; vendorId?: string; barcode?: string;
 }
 interface AppwriteUser {
   $id: string; email: string; name: string; $createdAt: string;
@@ -39,7 +39,7 @@ function useAdminFetch<T>(resource: string, authed: boolean) {
     if (!authed) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API}?resource=${resource}`, { headers: { "x-admin-secret": ADMIN_SECRET } });
+      const res = await fetch(`${API}?resource=${resource}`, { headers: { "x-admin-secret": ADMIN_SECRET || "" } });
       const json = await res.json();
       setData(json);
     } catch { /* ignore */ }
@@ -112,10 +112,9 @@ export default function AdminPage() {
   const intakes = intakesData?.documents || [];
   const vendors = vendorsData?.documents || [];
 
-  const adminPost = async (body: object) => {
+  const adminPost = async (body: any) => {
     const res = await fetch(API, {
-      method: "POST",
-      headers: { "x-admin-secret": ADMIN_SECRET, "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET || "" },
       body: JSON.stringify(body),
     });
     return res.json();
