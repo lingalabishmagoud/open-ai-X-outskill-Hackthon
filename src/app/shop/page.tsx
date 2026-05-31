@@ -164,7 +164,7 @@ export default function ShopPage() {
   const filtered = useMemo(() => {
     let list = products;
     if (userCommunity?.cityId) {
-      list = products.filter(p => p.vendorId && validVendorIds.includes(p.vendorId));
+      list = products.filter(p => !p.vendorId || validVendorIds.includes(p.vendorId));
     }
 
     if (aiResponse) {
@@ -322,7 +322,7 @@ export default function ShopPage() {
                   onClick={() => { if (banner.link) window.location.href = banner.link; }}
                   style={{ minWidth: 320, height: 160, borderRadius: 16, overflow: "hidden", position: "relative", flexShrink: 0, cursor: banner.link ? "pointer" : "default" }}
                 >
-                  <img src={banner.imageUrl} alt={banner.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={banner.imageUrl || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"} alt={banner.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)", display: "flex", alignItems: "flex-end", padding: 16 }}>
                     <h3 style={{ color: "white", fontWeight: 800, fontSize: "1.2rem" }}>{banner.title}</h3>
                   </div>
@@ -348,7 +348,7 @@ export default function ShopPage() {
                     >
                       <div style={{ borderRadius: 8, overflow: "hidden", height: 110, background: "rgba(255,255,255,0.05)", position: "relative" }}>
                         <div style={{ position: "absolute", top: 8, left: 8, background: "#ec4899", color: "white", fontSize: "0.7rem", fontWeight: 800, padding: "2px 8px", borderRadius: 999 }}>#1 Highly Purchased</div>
-                        <img src={product.image_url} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img src={product.image_url || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
                       <p style={{ fontSize: "0.875rem", fontWeight: 600, lineHeight: 1.3, flex: 1 }}>{product.name}</p>
                       <p style={{ fontSize: "1rem", fontWeight: 800, color: "#22c55e" }}>₹{product.mrp}</p>
@@ -419,7 +419,7 @@ export default function ShopPage() {
                     {/* Product Image */}
                     <div style={{ borderRadius: 8, overflow: "hidden", height: 110, background: "rgba(255,255,255,0.05)" }}>
                       <img
-                        src={product.image_url}
+                        src={product.image_url || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"}
                         alt={product.name}
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"; }}
@@ -515,7 +515,7 @@ export default function ShopPage() {
               ) : (
                 items.map(item => (
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "12px", borderRadius: 10, background: "var(--surface)" }}>
-                    <img src={item.image_url} alt={item.name} style={{ width: 50, height: 50, borderRadius: 8, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"; }} />
+                    <img src={item.image_url || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"} alt={item.name} style={{ width: 50, height: 50, borderRadius: 8, objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"; }} />
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: 4 }}>{item.name}</p>
                       <p style={{ color: "#22c55e", fontWeight: 700 }}>₹{item.mrp} × {item.quantity} = ₹{item.mrp * item.quantity}</p>

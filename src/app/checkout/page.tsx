@@ -9,7 +9,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShoppingBag, MapPin, Clock, ArrowLeft, CheckCircle, Receipt } from "lucide-react";
 import { useEffect } from "react";
-import { Models } from "appwrite";
+import { Models, Query } from "appwrite";
+import { CITIES_COL, APARTMENTS_COL } from "@/lib/appwrite";
 
 const TIME_SLOTS = [
   { id: "morning", label: "Morning", time: "8:00 AM – 11:00 AM", emoji: "🌅" },
@@ -20,7 +21,12 @@ const TIME_SLOTS = [
 export default function CheckoutPage() {
   const { items, totalMRP, clearCart } = useCart();
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
+  
+  const [cities, setCities] = useState<any[]>([]);
+  const [apartments, setApartments] = useState<any[]>([]);
+  const [selectedCityId, setSelectedCityId] = useState("");
   const [apartmentName, setApartmentName] = useState("");
+  
   const [blockNumber, setBlockNumber] = useState("");
   const [flatNumber, setFlatNumber] = useState("");
   const [mapLink, setMapLink] = useState("");
@@ -42,6 +48,7 @@ export default function CheckoutPage() {
       if (data) {
         const parsed = JSON.parse(data);
         setApartmentName(parsed.apartmentName);
+        setSelectedCityId(parsed.cityId || "");
         setInstructions(parsed.instructions || "");
       } else {
         const leg = localStorage.getItem("hk_user_community");
@@ -53,7 +60,29 @@ export default function CheckoutPage() {
         }
       }
     }
+    // Fetch cities and apartments using the public API route
+    fetch("/api/public?resource=cities")
+      .then(res => res.json())
+      .then(json => setCities(json.documents || []))
+      .catch(() => {});
+      
+    fetch("/api/public?resource=apartments")
+      .then(res => res.json())
+      .then(json => setApartments(json.documents || []))
+      .catch(() => {});
   }, []);
+
+  // Check if the currently saved apartment still exists in the fetched data. If not, reset it.
+  useEffect(() => {
+    if (apartments.length > 0 && apartmentName) {
+      const exists = apartments.some(a => a.name === apartmentName);
+      if (!exists) setApartmentName("");
+    }
+    if (cities.length > 0 && selectedCityId) {
+      const exists = cities.some(c => c.$id === selectedCityId);
+      if (!exists) setSelectedCityId("");
+    }
+  }, [apartments, cities]);
 
   useEffect(() => {
     if (!success && items.length === 0 && user) {
@@ -160,10 +189,23 @@ export default function CheckoutPage() {
             <h2 style={{ fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
               <MapPin size={20} color="#6366f1" /> Delivery Address
             </h2>
+            
+            <div className="form-group">
+              <label className="label">City *</label>
+              <select className="input" value={selectedCityId} onChange={e => { setSelectedCityId(e.target.value); setApartmentName(""); }} required style={{ WebkitAppearance: "none" }}>
+                <option value="" disabled>Select your city...</option>
+                {cities.map(c => <option key={c.$id} value={c.$id}>{c.name}</option>)}
+              </select>
+            </div>
+            
             <div className="form-group">
               <label className="label">Apartment / Society Name *</label>
-              <input className="input" type="text" placeholder="e.g. Prestige Lakeside Habitat" value={apartmentName} onChange={e => setApartmentName(e.target.value)} required />
+              <select className="input" value={apartmentName} onChange={e => setApartmentName(e.target.value)} required disabled={!selectedCityId} style={{ WebkitAppearance: "none" }}>
+                <option value="" disabled>{selectedCityId ? "Select your apartment..." : "Please select a city first"}</option>
+                {apartments.filter(a => a.cityId === selectedCityId).map(a => <option key={a.$id} value={a.name}>{a.name}</option>)}
+              </select>
             </div>
+            
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <div className="form-group">
                 <label className="label">Block / Tower *</label>

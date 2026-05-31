@@ -101,6 +101,7 @@ export default function AdminPage() {
   const { data: aptsData, reload: reloadApts } = useAdminFetch<{ documents: any[] }>("apartments", authed);
   const { data: bannersData, reload: reloadBanners } = useAdminFetch<{ documents: any[] }>("banners", authed);
   const { data: intakesData, reload: reloadIntakes } = useAdminFetch<{ documents: any[] }>("intakes", authed);
+  const { data: vendorsData } = useAdminFetch<{ documents: any[] }>("vendors", authed);
 
   const orders = ordersData?.documents || [];
   const products = productsData?.documents || [];
@@ -109,6 +110,7 @@ export default function AdminPage() {
   const apartments = aptsData?.documents || [];
   const banners = bannersData?.documents || [];
   const intakes = intakesData?.documents || [];
+  const vendors = vendorsData?.documents || [];
 
   const adminPost = async (body: object) => {
     const res = await fetch(API, {
@@ -127,6 +129,20 @@ export default function AdminPage() {
 
   const updateOrderStatus = async (id: string, status: string) => {
     await adminPost({ action: "update", resource: "order", id, data: { status } });
+    reloadOrders();
+  };
+
+  const updateOrderItemVendor = async (orderId: string, itemId: string, newVendorId: string) => {
+    const order = orders.find(o => o.$id === orderId);
+    if (!order) return;
+    const items = JSON.parse(order.items_json || "[]");
+    const updatedItems = items.map((i: any) => {
+      if (i.id === itemId) {
+        return { ...i, vendorId: newVendorId, status: newVendorId ? "assigned" : "pending" };
+      }
+      return i;
+    });
+    await adminPost({ action: "update", resource: "order", id: orderId, data: { items_json: JSON.stringify(updatedItems) } });
     reloadOrders();
   };
 
@@ -318,11 +334,51 @@ export default function AdminPage() {
                 </div>
                 {expandedOrder === order.$id && (
                   <div style={{ padding: "0 20px 20px", borderTop: "1px solid var(--border)" }}>
-                    <div style={{ marginTop: 16, marginBottom: 16, fontSize: "0.875rem", color: "var(--muted)" }}>
-                      <strong style={{ color: "var(--text)" }}>Items:</strong>{" "}
-                      {JSON.parse(order.items_json || "[]").map((i: { name: string; qty: number; mrp: number }) => `${i.name} ×${i.qty}`).join(", ")}
+                    <div style={{ marginTop: 16, marginBottom: 16 }}>
+                      <h4 style={{ color: "var(--text)", marginBottom: 12, fontWeight: 700 }}>Order Items & Fulfillment</h4>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {JSON.parse(order.items_json || "[]").filter((i: any) => i.id !== "_metadata_").map((i: any) => {
+                          // Find vendors who sell this product and have enough stock
+                          const norm = (s: string) => (s || "").toLowerCase().replace(/\s+/g, ' ').trim();
+                          const matchingProducts = products.filter(p => 
+                            (p.$id === i.id || norm(p.name) === norm(i.name)) && 
+                            (p.quantity || 0) >= i.qty
+                          );
+                          
+                          return (
+                            <div key={i.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--surface)", padding: "12px 16px", borderRadius: 12, border: "1px solid var(--border)" }}>
+                              <div>
+                                <p style={{ fontWeight: 600, fontSize: "0.95rem" }}>{i.name}</p>
+                                <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: 4 }}>
+                                  Qty: {i.qty} • Status: <span style={{ color: i.status === "packed" ? "#22c55e" : i.status === "assigned" ? "#3b82f6" : "#f59e0b", fontWeight: 700 }}>{(i.status || "pending").toUpperCase()}</span>
+                                </p>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <select 
+                                  className="input" 
+                                  value={i.vendorId || ""} 
+                                  onChange={e => updateOrderItemVendor(order.$id, i.id, e.target.value)}
+                                  disabled={i.status === "packed"}
+                                  style={{ padding: "8px 12px", borderRadius: 8, fontSize: "0.85rem", width: 220 }}
+                                >
+                                  <option value="">-- Do Not Assign --</option>
+                                  {matchingProducts.map((p, idx) => {
+                                    const vendorName = vendors.find(v => v.$id === p.vendorId)?.name || "Unknown";
+                                    return <option key={`${p.vendorId}-${idx}`} value={p.vendorId || ""}>{vendorName} (Stock: {p.quantity})</option>;
+                                  })}
+                                </select>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {JSON.parse(order.items_json || "[]").filter((i: any) => i.id === "_metadata_" && i.instructions).map((i: any) => (
+                          <div key="meta" style={{ padding: 12, background: "rgba(239,68,68,0.1)", color: "#ef4444", borderRadius: 8, fontSize: "0.85rem", border: "1px solid rgba(239,68,68,0.2)" }}>
+                            <strong>Instructions:</strong> {i.instructions}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
                       {["pending", "packed", "out_for_delivery", "delivered"].map(s => (
                         <button
                           key={s}
@@ -401,7 +457,7 @@ export default function AdminPage() {
                   {/* Image */}
                   <div style={{ position: "relative" }}>
                     <img
-                      src={editingId === p.$id ? (editForm.image_url || p.image_url) : p.image_url}
+                      src={editingId === p.$id ? (editForm.image_url || p.image_url || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300") : (p.image_url || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300")}
                       alt={p.name}
                       style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }}
                       onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"; }}
@@ -649,7 +705,7 @@ export default function AdminPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               {banners.map(b => (
                 <div key={b.$id} className="glass" style={{ borderRadius: 12, overflow: "hidden" }}>
-                  <img src={b.imageUrl} alt={b.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
+                  <img src={b.imageUrl || "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=300"} alt={b.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
                   <div style={{ padding: 16 }}>
                     <h3 style={{ fontWeight: 700 }}>{b.title}</h3>
                     <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 4 }}>Target: {b.targetCityId} / {b.targetApartmentId}</p>
@@ -676,28 +732,23 @@ export default function AdminPage() {
           <div>
             <h1 style={{ fontWeight: 800, fontSize: "1.6rem", marginBottom: 24 }}>Vendor Intakes (Barcode Scans)</h1>
             <div style={{ display: "grid", gap: 12 }}>
-              {intakes.map(i => (
+              {intakes.map(i => {
+                const vendorName = vendors.find(v => v.$id === i.vendorId)?.name || "Unknown Vendor";
+                const liveProduct = products.find(p => p.vendorId === i.vendorId && p.barcode === i.barcode);
+                const displayQty = liveProduct && liveProduct.quantity !== undefined ? liveProduct.quantity : i.quantity;
+                return (
                 <div key={i.$id} className="glass" style={{ padding: 16, borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <h3 style={{ fontWeight: 700 }}>{i.productName}</h3>
-                    <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Barcode: {i.barcode} • Qty: <span style={{ color: "#22c55e", fontWeight: 700 }}>+{i.quantity}</span></p>
+                    <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: 4 }}>Barcode: {i.barcode} • Live Qty: <span style={{ color: "#22c55e", fontWeight: 700 }}>{displayQty}</span></p>
+                    <span style={{ background: "rgba(59,130,246,0.1)", color: "#3b82f6", padding: "2px 8px", borderRadius: 4, fontSize: "0.75rem", fontWeight: 600 }}>
+                      Requested by: {vendorName}
+                    </span>
                   </div>
                   {i.status === 'pending' ? (
                     <button onClick={async () => {
                       const meta = i.metadata_json ? JSON.parse(i.metadata_json) : {};
                       await adminPost({ action: "update", resource: "intakes", id: i.$id, data: { status: "approved" } });
-                      await adminPost({ 
-                        action: "create", 
-                        resource: "product", 
-                        data: {
-                          name: i.productName,
-                          category: meta.category || "All",
-                          mrp: meta.mrp || 0,
-                          wholesale_price: meta.wholesale_price || 0,
-                          image_url: meta.imageUrl || "",
-                          vendorId: i.vendorId
-                        }
-                      });
                       
                       // Push to Master Catalog so other vendors get it instantly!
                       await adminPost({
@@ -720,7 +771,7 @@ export default function AdminPage() {
                     <span style={{ color: "#22c55e", fontWeight: 700, padding: "8px 16px", background: "rgba(34,197,94,0.1)", borderRadius: 8 }}>Approved</span>
                   )}
                 </div>
-              ))}
+              )})}
               {intakes.length === 0 && <p style={{ color: "var(--muted)" }}>No vendor intakes pending.</p>}
             </div>
           </div>
