@@ -7,7 +7,7 @@ import {
   X, Check, AlertCircle, Lock, Pencil, Save, Brain, TrendingUp, AlertTriangle, Building2, Image as ImageIcon, ScanBarcode
 } from "lucide-react";
 
-const ADMIN_SECRET = process.env.NEXT_PUBLIC_ADMIN_SECRET;
+const ADMIN_SECRET = process.env.NEXT_PUBLIC_ADMIN_SECRET || "hyperlocal@admin2024";
 const API = "/api/admin";
 
 interface Order {

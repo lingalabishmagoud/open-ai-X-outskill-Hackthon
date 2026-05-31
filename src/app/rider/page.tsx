@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Lock, Bike, MapPin, Package, CheckCircle, ScanBarcode, Clock, Navigation, Sun, Sunrise, Moon } from "lucide-react";
 
-const RIDER_SECRET = process.env.NEXT_PUBLIC_RIDER_SECRET;
+const RIDER_SECRET = process.env.NEXT_PUBLIC_RIDER_SECRET || "rider123";
 const API = "/api/admin"; // Using admin API for hackathon speed
 
 interface Order {
