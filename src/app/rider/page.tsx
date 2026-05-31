@@ -51,7 +51,7 @@ export default function RiderApp() {
     setTimeout(() => setToast(null), 3000);
   };
   // --- SCANNER HANDLERS ---
-  const handleVendorScanComplete = async (barcode: string) => {
+  const handleVendorScanComplete = useCallback(async (barcode: string) => {
      if (!activeVendorPickup) return;
      const vid = activeVendorPickup;
      
